@@ -19,8 +19,7 @@ type User struct {
 }
 
 func getUser(id int) (User, error) {
-	sql := "SELECT u.id, u.username FROM user u
-    WHERE u.id = ?"
+	sql := "SELECT u.id, u.username FROM user u WHERE u.id = ?"
 	params := []interface{}{id}
 
 	resultsData, err := QueryD1(sql, params, apiToken, accountID, databaseID)
