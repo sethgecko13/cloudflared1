@@ -15,13 +15,15 @@ import (
 // sql: SQL query string with ? placeholders for parameters
 // params: array of values to be interpolated into the placeholders
 // Returns the extracted result.0.results data as raw JSON bytes
-func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID string) ([]byte, error) {
+func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID, baseURL string) ([]byte, error) {
 	if apiToken == "" || accountID == "" || databaseID == "" {
 		return nil, fmt.Errorf("missing required Cloudflare credentials")
 	}
-	// Build D1 API endpoint
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query",
-		accountID, databaseID)
+	// Allow baseURL override for testing
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query", accountID, databaseID)
+	}
+	url := baseURL
 
 	payload := map[string]interface{}{
 		"sql":    sql,

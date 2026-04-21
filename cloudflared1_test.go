@@ -4,21 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 )
 
 func TestQueryD1(t *testing.T) {
-	// Set required environment variables
-	os.Setenv("CLOUDFLARE_API_TOKEN", "test-token")
-	os.Setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
-	os.Setenv("CLOUDFLARE_D1_DATABASE_ID", "test-db")
-	defer func() {
-		os.Unsetenv("CLOUDFLARE_API_TOKEN")
-		os.Unsetenv("CLOUDFLARE_ACCOUNT_ID")
-		os.Unsetenv("CLOUDFLARE_D1_DATABASE_ID")
-	}()
-
 	// Mock D1 API server
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -38,38 +27,27 @@ func TestQueryD1(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	// Patch the URL in queryD1 by temporarily replacing os.Getenv
-	origGetenv := os.Getenv
-	os.Getenv = func(key string) string {
-		switch key {
-		case "CLOUDFLARE_API_TOKEN":
-			return "test-token"
-		case "CLOUDFLARE_ACCOUNT_ID":
-			return "test-account"
-		case "CLOUDFLARE_D1_DATABASE_ID":
-			return "test-db"
-		default:
-			return origGetenv(key)
-		}
-	}
-	defer func() { os.Getenv = origGetenv }()
-
-	// Patch http.Client to redirect to our test server
+	// Patch http.DefaultClient to use our test server's client
 	origClient := http.DefaultClient
 	http.DefaultClient = server.Client()
 	defer func() { http.DefaultClient = origClient }()
 
-	// Patch the URL construction in queryD1 (simulate by replacing the function if needed)
-	// For this test, we assume the URL is constructed as in the code, so we need to intercept DNS or refactor for testability.
-	// Instead, let's test the error path for missing env as a simple test:
-	os.Unsetenv("CLOUDFLARE_API_TOKEN")
-	_, err := queryD1("SELECT 1", nil, "test-token", "test-account", "test-db")
+	// Test error when missing credentials
+	_, err := queryD1("SELECT 1", nil, "", "", "", server.URL)
 	if err == nil {
-		t.Error("expected error when env vars are missing")
+		t.Error("expected error when credentials are missing")
 	}
-	// Restore env for happy path
-	os.Setenv("CLOUDFLARE_API_TOKEN", "test-token")
 
-	// Note: To fully test the happy path, queryD1 would need to accept a custom endpoint or http.Client for testability.
-	// This test covers the error path and basic invocation.
+	// Test happy path
+	data, err := queryD1("SELECT 1", nil, "test-token", "test-account", "test-db", server.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var results []map[string]interface{}
+	if err := json.Unmarshal(data, &results); err != nil {
+		t.Fatalf("failed to unmarshal results: %v", err)
+	}
+	if len(results) != 1 || results[0]["id"] != float64(1) || results[0]["name"] != "test" {
+		t.Errorf("unexpected results: %+v", results)
+	}
 }
