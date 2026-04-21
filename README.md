@@ -23,7 +23,7 @@ func getUser(id int) (User, error) {
     WHERE u.id = ?"
 	params := []interface{}{id}
 
-	resultsData, err := queryD1(sql, params)
+	resultsData, err := queryD1(sql, params, apiToken, accountID, databaseID)
 	if err != nil {
 		return User{}, err
 	}

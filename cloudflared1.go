@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -16,12 +15,9 @@ import (
 // sql: SQL query string with ? placeholders for parameters
 // params: array of values to be interpolated into the placeholders
 // Returns the extracted result.0.results data as raw JSON bytes
-func queryD1(sql string, params []interface{}) ([]byte, error) {
-	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
-	databaseID := os.Getenv("CLOUDFLARE_D1_DATABASE_ID")
+func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID string) ([]byte, error) {
 	if apiToken == "" || accountID == "" || databaseID == "" {
-		return nil, fmt.Errorf("missing required Cloudflare environment variables")
+		return nil, fmt.Errorf("missing required Cloudflare credentials")
 	}
 	// Build D1 API endpoint
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query",
