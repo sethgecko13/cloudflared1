@@ -11,10 +11,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// queryD1 executes a SQL query against the Cloudflare D1 database with parameter interpolation
-// sql: SQL query string with ? placeholders for parameters
-// params: array of values to be interpolated into the placeholders
-// Returns the extracted result.0.results data as raw JSON bytes
+func QueryD1(sql string, params []interface{}, apiToken, accountID, databaseID string) ([]byte, error) {
+	return queryD1(sql, params, apiToken, accountID, databaseID, "")
+}
 func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID, baseURL string) ([]byte, error) {
 	if apiToken == "" || accountID == "" || databaseID == "" {
 		return nil, fmt.Errorf("missing required Cloudflare credentials")
