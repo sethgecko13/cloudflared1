@@ -9,13 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@latest
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@latest
         with:
           go-version: 'stable'
       - name: Install dependencies
