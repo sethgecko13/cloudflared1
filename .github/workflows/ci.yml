@@ -19,4 +19,8 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
       - name: Run unit tests
-        run: go test -v ./...
+        run: |
+              export CLOUDFLARE_D1_DATABASE_ID="${{secrets.CLOUDFLARE_D1_DATABASE_ID}}"
+              export CLOUDFLARE_ACCOUNT_ID="${{secrets.CLOUDFLARE_ACCOUNT_ID}}"
+              export CLOUDFLARE_API_TOKEN="${{secrets.CLOUDFLARE_API_TOKEN}}"
+              go test -v ./...
