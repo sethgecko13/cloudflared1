@@ -11,6 +11,8 @@ Interfacing with cloudflare D1 database is so stupid simple I couldn't believe i
 
 No more firewall issues, no drivers, no more ORM (because you get straight json back and you can just unmarsall direct to your object).
 
+Caveat: I'm using this for my own projects and adding features as necessary as I need them.  Probably a good idea to use this as a starting point for how to accomplish something similar instead of relying on my hundred lines of code as a hard dependency.
+
 ## Example:
 
 ```
