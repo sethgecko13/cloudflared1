@@ -1,4 +1,4 @@
-module github.com/sethgecko13/cloudflared1
+module github.com/sethgecko13/cloudflared1/v2
 
 go 1.24
 
