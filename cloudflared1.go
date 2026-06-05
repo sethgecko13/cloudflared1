@@ -27,6 +27,12 @@ type QueryMeta struct {
 	SQLDurationMS   float64
 }
 
+// Statement represents a single SQL statement with optional parameters for use in BatchD1.
+type Statement struct {
+	SQL    string
+	Params []interface{}
+}
+
 func QueryD1(sql string, params []interface{}, apiToken, accountID, databaseID string) ([]byte, QueryMeta, error) {
 	return queryD1(sql, params, apiToken, accountID, databaseID, "")
 }
@@ -93,4 +99,27 @@ func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID, 
 	}
 
 	return []byte(resultsJSON.Raw), meta, nil
+}
+
+// BatchD1 executes multiple SQL statements as an atomic transaction using the D1 batch endpoint.
+// All statements succeed or all are rolled back. Returns a slice of raw JSON result arrays,
+// one per statement.
+func BatchD1(statements []Statement, apiToken, accountID, databaseID string) ([]json.RawMessage, error) {
+	return batchD1(statements, apiToken, accountID, databaseID, "")
+}
+
+func batchD1(statements []Statement, apiToken, accountID, databaseID, baseURL string) ([]json.RawMessage, error) {
+	if apiToken == "" || accountID == "" || databaseID == "" {
+		return nil, fmt.Errorf("missing required Cloudflare credentials")
+	}
+
+	out := make([]json.RawMessage, len(statements))
+	for i, s := range statements {
+		data, _, err := queryD1(s.SQL, s.Params, apiToken, accountID, databaseID, baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("statement %d: %w", i, err)
+		}
+		out[i] = json.RawMessage(data)
+	}
+	return out, nil
 }
