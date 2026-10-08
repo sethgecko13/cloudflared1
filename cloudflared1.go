@@ -51,29 +51,9 @@ func queryD1(sql string, params []interface{}, apiToken, accountID, databaseID, 
 		"params": params,
 	}
 
-	payloadBytes, err := json.Marshal(payload)
+	body, err := postD1(url, apiToken, payload)
 	if err != nil {
-		return nil, QueryMeta{}, fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewBuffer(payloadBytes)))
-	if err != nil {
-		return nil, QueryMeta{}, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiToken))
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, QueryMeta{}, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return nil, QueryMeta{}, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, QueryMeta{}, err
 	}
 
 	// Extract the result.0.results data using gjson
@@ -113,13 +93,71 @@ func batchD1(statements []Statement, apiToken, accountID, databaseID, baseURL st
 		return nil, fmt.Errorf("missing required Cloudflare credentials")
 	}
 
-	out := make([]json.RawMessage, len(statements))
+	if len(statements) == 0 {
+		return []json.RawMessage{}, nil
+	}
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query", accountID, databaseID)
+	}
+
+	batch := make([]map[string]interface{}, len(statements))
 	for i, s := range statements {
-		data, _, err := queryD1(s.SQL, s.Params, apiToken, accountID, databaseID, baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("statement %d: %w", i, err)
+		params := s.Params
+		if params == nil {
+			params = []interface{}{}
 		}
-		out[i] = json.RawMessage(data)
+		batch[i] = map[string]interface{}{
+			"sql":    s.SQL,
+			"params": params,
+		}
+	}
+
+	body, err := postD1(baseURL, apiToken, map[string]interface{}{"batch": batch})
+	if err != nil {
+		return nil, err
+	}
+
+	results := gjson.GetBytes(body, "result").Array()
+	if len(results) != len(statements) {
+		return nil, fmt.Errorf("D1 batch returned %d results for %d statements", len(results), len(statements))
+	}
+
+	out := make([]json.RawMessage, len(statements))
+	for i, r := range results {
+		rows := r.Get("results")
+		if !rows.Exists() {
+			return nil, fmt.Errorf("statement %d: D1 response has no result data", i)
+		}
+		out[i] = json.RawMessage(rows.Raw)
 	}
 	return out, nil
+}
+
+// postD1 sends a JSON payload to the D1 query endpoint and returns the raw response body.
+func postD1(url, apiToken string, payload interface{}) ([]byte, error) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewBuffer(payloadBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
 }

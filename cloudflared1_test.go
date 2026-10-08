@@ -231,19 +231,18 @@ func TestQueryD1IntegrationAtomic(t *testing.T) {
 }
 func TestBatchD1(t *testing.T) {
 	callCount := 0
-	responses := [][]map[string]interface{}{
-		{{"id": float64(1)}},
-		{},
-	}
+	var gotBody map[string]interface{}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		json.NewDecoder(r.Body).Decode(&gotBody)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		resp := map[string]interface{}{
 			"result": []map[string]interface{}{
-				{"results": responses[callCount]},
+				{"results": []map[string]interface{}{{"id": float64(1)}}},
+				{"results": []map[string]interface{}{}},
 			},
 		}
-		callCount++
 		json.NewEncoder(w).Encode(resp)
 	})
 	server := httptest.NewServer(handler)
@@ -274,6 +273,17 @@ func TestBatchD1(t *testing.T) {
 	}
 	if len(first) != 1 || first[0]["id"] != float64(1) {
 		t.Errorf("unexpected first result: %+v", first)
+	}
+
+	if callCount != 1 {
+		t.Errorf("expected exactly 1 HTTP call, got %d", callCount)
+	}
+	batch, ok := gotBody["batch"].([]interface{})
+	if !ok || len(batch) != 2 {
+		t.Fatalf("expected request body with 2 batch entries, got %+v", gotBody)
+	}
+	if sql := batch[1].(map[string]interface{})["sql"]; sql != stmts[1].SQL {
+		t.Errorf("unexpected sql in second batch entry: %v", sql)
 	}
 }
 
