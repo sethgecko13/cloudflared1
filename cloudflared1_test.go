@@ -2,6 +2,7 @@ package cloudflared1
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -310,3 +311,44 @@ func TestBatchD1Integration(t *testing.T) {
 		t.Fatalf("expected 4 result sets, got %d", len(results))
 	}
 }
+
+// TestPostD1RequestIsRetryable checks that the request postD1 sends has a
+// GetBody that returns the full payload again, which the transport needs to
+// resend it after an HTTP/2 GOAWAY.
+func TestPostD1RequestIsRetryable(t *testing.T) {
+	var bodies []string
+	var getBodyOK bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		w.Write([]byte(`{"success":true,"result":[{"results":[]}]}`))
+	}))
+	defer server.Close()
+
+	orig := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.GetBody != nil {
+			rc, err := r.GetBody()
+			if err == nil {
+				b, _ := io.ReadAll(rc)
+				getBodyOK = len(b) > 0 && int64(len(b)) == r.ContentLength
+			}
+		}
+		return orig.RoundTrip(r)
+	})
+	defer func() { http.DefaultTransport = orig }()
+
+	if _, err := postD1(server.URL, "token", map[string]string{"sql": "SELECT 1"}); err != nil {
+		t.Fatalf("postD1: %v", err)
+	}
+	if !getBodyOK {
+		t.Errorf("request GetBody missing or doesn't return the full payload")
+	}
+	if len(bodies) != 1 || bodies[0] != `{"sql":"SELECT 1"}` {
+		t.Errorf("server got bodies %q", bodies)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
