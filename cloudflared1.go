@@ -140,7 +140,12 @@ func postD1(url, apiToken string, payload interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewBuffer(payloadBytes)))
+	// A *bytes.Reader body (not wrapped) lets http.NewRequest set GetBody,
+	// so the transport can resend the request when the server closes the
+	// connection before processing it, e.g. an HTTP/2 GOAWAY during a
+	// graceful shutdown. Without GetBody that fails with "cannot retry err
+	// ... after Request.Body was written".
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
